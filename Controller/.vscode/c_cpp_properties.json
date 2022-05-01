@@ -3,7 +3,10 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+				"/usr/include/**",
+				"/usr/share/pico-sdk/**"
+
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",

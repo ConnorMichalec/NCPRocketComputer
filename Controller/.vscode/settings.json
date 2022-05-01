@@ -1,12 +1,13 @@
 {
     "cmake.configureOnOpen": true,
     "files.associations": {
-        "*.mcmeta": "jsonc",
-        "stdio.h": "c",
-        "stdlib.h": "c",
-        "typeinfo": "cpp",
-        "string": "cpp",
-        "map": "cpp",
-        "regex": "cpp"
-    }
+		"*.mcmeta": "jsonc",
+		"stdio.h": "c",
+		"stdlib.h": "c",
+		"typeinfo": "cpp",
+		"string": "cpp",
+		"map": "cpp",
+		"regex": "cpp",
+		"error_manager.h": "c"
+	}
 }
