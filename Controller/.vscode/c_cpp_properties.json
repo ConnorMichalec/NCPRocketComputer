@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
 				"/usr/include/**",
-				"/usr/share/pico-sdk/**"
+				"/usr/share/pico-sdk/**",
+				"${workspaceFolder}/lib/RF24"
 
             ],
             "defines": [],

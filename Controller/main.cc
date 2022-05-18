@@ -7,6 +7,7 @@
 
 // yes i know, vectors would have been easier but i was trying to learn okay?
 // Also sorry for not using smart pointers
+// Also c++ was a terrible choice and made this so much harder than python
 
 
 // UART 0
@@ -25,8 +26,6 @@ const int UART_STOPBITS = 1;  				// amount of bits to signal stop of baud
 using namespace std;
 
 Main *program;
-
-static int chars_rxed = 0;
 
 // GPS RX interrupt handler
 void handleRXIRQ() {
@@ -65,8 +64,6 @@ void Main::statusLEDTick() {
 
 void Main::Init() {
 
-	transmission = new Transmission();
-
     stdio_init_all();
 
     uart_init(uart0, UART_BAUDRATE);
@@ -77,6 +74,16 @@ void Main::Init() {
 
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+
+	transmission = new Transmission();
+
+	if(transmission->Initialize()) {
+		// fail
+		while(true){
+			printf("transmitter fail to init");
+			sleep_ms(100);
+		}
+	}
 
     // turn off CTS/RTS(Flow control) because gps module works asynchronously
     uart_set_hw_flow(uart0, false, false);
@@ -92,8 +99,6 @@ void Main::Init() {
     uart_set_irq_enables(uart0, true, false);
 
 
-
-	transmission->Initialize();
 
     // LOOP, RX interrupt from GPS data, resume loop
     while (true) {
@@ -152,25 +157,23 @@ void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
     }
 
 
-    
-    char temp_buffer_terminated[10000];     // scope level buffer just to hold the same thing but with a null termination character on the end of it.
+    // scope level buffer just to hold the same thing but with a null termination character on the end of it.
+    char temp_buffer_terminated[10000];     
 
 
     // add each char from the pointer sequence to the array
-
     for(int i = 0; i<accumulated_received_buffer_offset; i++) {
         temp_buffer_terminated[i] = accumulated_received_buffer[i];
     }
 
+
     // this is what allows strings to actually know when the string ends so we can do regex with it.
     temp_buffer_terminated[accumulated_received_buffer_offset] = '\0';
 
-    //printf(temp_buffer_terminated);
 
 
 
     // find out of we now have a whole block of gps data, if so, process this gps data to transmit 
-
     regex expression(endblock_identifier);
     smatch match;
     string accumulated_received_buffer_string = string(temp_buffer_terminated);
@@ -180,8 +183,14 @@ void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
 
     // if we found a match this means we are now on the end of this data block, process what we have in the buffer, reset the buffer, and add the recently rxed data.
     if(success) {
+
+		// Add newline to end of block
+		accumulated_received_buffer[accumulated_received_buffer_offset] = '\n';	
+		accumulated_received_buffer_offset++;
+
         
         Process_gps_block(accumulated_received_buffer, accumulated_received_buffer_offset);
+
 
         // clear buffer after everything is nice and transmitted
         memset(accumulated_received_buffer, 0, sizeof(char)*accumulated_received_buffer_offset);
@@ -198,41 +207,90 @@ void Main::Process_gps_block(char *data, int data_size) {
 
     /* Split data into seperate lines */
 
-    char **lineBuffer = new char*[300]; 
-    char *charBuffer = new char[300];
+	// Dynamic arrays
+    char **lineBuffer = new char*[10]; 		// 10 pointers to chars allows for 10 lines
+    char *charBuffer = new char[300];		// 300 characters for each line
+
+	for(int i = 0; i<10; i++) {
+		// initialize each line in linebuffer
+		lineBuffer[i] = new char[300];		
+	}
+
+	int *lineSize = new int[10];
+
 
     int line_offset = 0;
     int char_offset = 0;
     for(int dataIndex = 0; dataIndex<data_size; dataIndex++) {
-        if(data[dataIndex] == '$') {
-            //  newline
-            lineBuffer[line_offset] = charBuffer;
+        if(data[dataIndex] == '\n') {
+			// ensure the \n is added
+			charBuffer[char_offset] = data[dataIndex];
+            char_offset++;
+
+			// Note the line size
+			lineSize[line_offset] = char_offset;
+
+            // new line, copy current char buffer to it's respective line buffer so it can be reset for the next line
+            memcpy(lineBuffer[line_offset], charBuffer, char_offset*sizeof(char));
+			lineBuffer[line_offset][char_offset] = '\0';
             line_offset++;
 
-            // reset line buffer
-            memset(charBuffer, 0, sizeof(char)*char_offset);
+
+            // reset char buffer
+			delete[] charBuffer;
+			charBuffer = new char[300];
             char_offset = 0;
-            
         }
         else {
             // continue adding to current line
             charBuffer[char_offset] = data[dataIndex];
             char_offset++;
-
-            
         }
     }
 
-    /*          */
 
-    printf(lineBuffer[0]);
+    /* Process each line */
 
+
+
+	/* Transmit all proccessed data */
+	for(int lineIndex = 0; lineIndex<line_offset; lineIndex++) {
+		Transmit(lineBuffer[lineIndex], lineSize[lineIndex]);
+	}
+
+
+	for(int i = 0; i<10; i++) {
+		// delete 
+		delete[] lineBuffer[i];
+	}
     delete[] lineBuffer;
     delete[] charBuffer;
+	delete[] lineSize;
 }
 
 // transmit data over LoRa/RF module
 void Main::Transmit(char *data, int data_size) {
+
+	// Transmit data in 5 byte chunks
+	
+	uint8_t* transmissionBuffer = new uint8_t[5];
+	
+	for(int bufferOffset = 0; bufferOffset<data_size; bufferOffset++) {
+		transmissionBuffer[bufferOffset%5] = data[bufferOffset];
+
+		// tarnsmit buffer if it gets full or we reach end of data segment
+		if(((bufferOffset % 5) == 4) || bufferOffset == data_size-1) {
+			if(!transmission->TransmitData(transmissionBuffer)) {
+				printf("No transmit response");
+			}
+
+			memset(transmissionBuffer, 0, 5*sizeof(char));
+
+		}
+	}
+
+	delete[] transmissionBuffer;
+
 }
 
 

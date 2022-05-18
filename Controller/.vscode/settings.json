@@ -8,6 +8,7 @@
 		"string": "cpp",
 		"map": "cpp",
 		"regex": "cpp",
-		"error_manager.h": "c"
+		"error_manager.h": "c",
+		"*.ipp": "cpp"
 	}
 }
