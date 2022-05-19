@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<link rel="stylesheet"
+		href="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.14.1/css/ol.css" type="text/css">
+	<style>
+		.map {
+			position: absolute;
+			margin: 0;
+			padding: 0;
+			top: 50;
+			left: 0;
+			width: 100%;
+			height: 90%;
+			
+		}
+	</style>
+	<script src="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.14.1/build/ol.js"></script>
+	<title>NCP Rocket club tracker</title>
+</head>
+
+<body>
+	<!-- Override timed updates -->
+	<button onclick="request_data();">Force fetch data</button> 
+
+
+
+
+	<span id="lon"></span>
+	<span id="lat"></span>
+	<span id="alt"></span>
+
+	<div>Navigate to last point: </div>
+	<a id="gmaplink" href=""></a>
+
+	<div id="map" class="map"></div>
+
+	<script type="text/javascript">
+
+		var previousResponses = {
+			points: {
+
+			}
+		}
+
+		var points = new ol.source.Vector({
+			features: [
+         	]
+		})
+
+		var map = new ol.Map({
+			target: 'map',
+			layers: [
+				new ol.layer.Tile({
+					source: new ol.source.OSM()
+				})
+			],
+			view: new ol.View({
+				center: ol.proj.fromLonLat([-87.62, 41.87]), // default over chicago
+				zoom: 16
+			})
+		});
+
+		var layer = new ol.layer.Vector({
+     		source: points
+ 		});
+
+ 		map.addLayer(layer);
+
+		function generateMapsLink(longitude, latitude) {
+			var generatedLink = "https://www.google.com/maps/search/?api=1&query="+latitude+","+longitude
+
+			var element = document.getElementById('gmaplink');
+			element.setAttribute('href', generatedLink)
+			element.innerHTML = generatedLink
+		}
+
+		function updateStats(longitude, latitude, altitude) {
+			var elementLon = document.getElementById("lon");
+			var elementLat = document.getElementById("lat");
+			var elementAlt = document.getElementById("alt");
+
+			elementLon.innerHTML = "Longitude: " + longitude;
+			elementLat.innerHTML = "Latitude: " + latitude;
+			elementAlt.innerHTML = "Altitude(m): "+ altitude;
+		}
+
+		function request_data() {
+			fetch("/request_update",
+				{
+					method: "POST",
+					headers: {
+					}
+				})
+				.then(function(response) {
+					response.json().then(function(responseData) {
+
+						for(let keyIndex = 0; keyIndex<Object.keys(responseData["points"]).length; keyIndex++) {
+							let currentKey = Object.keys(responseData["points"])[keyIndex];
+
+							// Get if previousResponses contains the key we are currently indexed at, if not add it as a feature, and add it to the previous responses.
+							if(!(currentKey in previousResponses["points"])) {
+								previousResponses["points"][currentKey] = responseData["points"][currentKey];
+
+								var longitude = responseData["points"][currentKey]["longitude"];
+								var latitude = responseData["points"][currentKey]["latitude"];
+								var altitude = responseData["points"][currentKey]["altitude"];
+
+								console.log("New data point received,\nLon: " + longitude + "\nLat: " + latitude + "\nAlt: " + altitude);
+							
+								// Update the link on top of page
+								generateMapsLink(longitude, latitude);
+
+								// Update the stats
+								updateStats(longitude, latitude, altitude);
+
+
+								// Update map to center on last point
+								map.getView().setCenter(ol.proj.fromLonLat([longitude, latitude]));
+
+
+
+								// Add this new point to map
+								var feature = new ol.Feature({
+									geometry: new ol.geom.Point(
+										ol.proj.fromLonLat([longitude, latitude])
+									)
+								});
+
+								points.addFeature(feature)
+
+																
+							}
+						}
+					})
+			});
+		}
+
+		// Update data every 5 seconds
+		setInterval(function() {
+			request_data();
+		}, 5000);
+
+	</script>
+</body>
+
+</html>
