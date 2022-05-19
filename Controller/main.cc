@@ -23,6 +23,9 @@ const int UART_BAUDRATE = 9600;
 const int UART_DATABITS = 8;  				// bit width for uart baud 
 const int UART_STOPBITS = 1;  				// amount of bits to signal stop of baud
 
+int checkCycles = 0;
+
+
 using namespace std;
 
 Main *program;
@@ -99,10 +102,9 @@ void Main::Init() {
     uart_set_irq_enables(uart0, true, false);
 
 
-
     // LOOP, RX interrupt from GPS data, resume loop
     while (true) {
-		
+		tight_loop_contents();
     }
 
 }
@@ -132,21 +134,22 @@ void Main::RXGPS() {
     uint8_t* rxed = new uint8_t[amount_rxed];   
     memcpy(rxed, rxed_buffer, sizeof(uint8_t)*amount_rxed);
 
+
     Handle_gps_data(rxed_buffer, amount_rxed);
 
     delete[] rxed_buffer;
 }
-
+	
 // format received gps data and seperate it into chunks of positions.
 void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
 
     //  This identifies when this block of gps data ends. Transmit/Clear the accumulated buffer and begin accumulating the new data.
-    const char* endblock_identifier = "\\$GPGLL.*N\\*.."; 
+    const char* endblock_identifier = "\\$GPGLL.*(N|A)\\*.."; 
 
 
     // concatenate the recently received data to the end of our buffer
 
-    if(accumulated_received_buffer_offset<1000) {
+    if(accumulated_received_buffer_offset<500) {
         memcpy(&accumulated_received_buffer[accumulated_received_buffer_offset], rxed, sizeof(uint8_t)*rxed_size);
         accumulated_received_buffer_offset += rxed_size;
     }
@@ -158,7 +161,7 @@ void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
 
 
     // scope level buffer just to hold the same thing but with a null termination character on the end of it.
-    char temp_buffer_terminated[10000];     
+    char temp_buffer_terminated[500];     
 
 
     // add each char from the pointer sequence to the array
@@ -178,7 +181,11 @@ void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
     smatch match;
     string accumulated_received_buffer_string = string(temp_buffer_terminated);
 
-    bool success = regex_search(accumulated_received_buffer_string, match, expression);
+	bool success = 0;
+	// Only check every 50 calls to save cpu
+	if(checkCycles%50==0) {
+    	success = regex_search(accumulated_received_buffer_string, match, expression);
+	}
 
 
     // if we found a match this means we are now on the end of this data block, process what we have in the buffer, reset the buffer, and add the recently rxed data.
@@ -189,7 +196,7 @@ void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
 		accumulated_received_buffer_offset++;
 
         
-        Process_gps_block(accumulated_received_buffer, accumulated_received_buffer_offset);
+        Transmit(accumulated_received_buffer, accumulated_received_buffer_offset);
 
 
         // clear buffer after everything is nice and transmitted
@@ -198,75 +205,12 @@ void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
 
     }
 
+	checkCycles++;
+
     
 }
 
 
-void Main::Process_gps_block(char *data, int data_size) {
-
-
-    /* Split data into seperate lines */
-
-	// Dynamic arrays
-    char **lineBuffer = new char*[10]; 		// 10 pointers to chars allows for 10 lines
-    char *charBuffer = new char[300];		// 300 characters for each line
-
-	for(int i = 0; i<10; i++) {
-		// initialize each line in linebuffer
-		lineBuffer[i] = new char[300];		
-	}
-
-	int *lineSize = new int[10];
-
-
-    int line_offset = 0;
-    int char_offset = 0;
-    for(int dataIndex = 0; dataIndex<data_size; dataIndex++) {
-        if(data[dataIndex] == '\n') {
-			// ensure the \n is added
-			charBuffer[char_offset] = data[dataIndex];
-            char_offset++;
-
-			// Note the line size
-			lineSize[line_offset] = char_offset;
-
-            // new line, copy current char buffer to it's respective line buffer so it can be reset for the next line
-            memcpy(lineBuffer[line_offset], charBuffer, char_offset*sizeof(char));
-			lineBuffer[line_offset][char_offset] = '\0';
-            line_offset++;
-
-
-            // reset char buffer
-			delete[] charBuffer;
-			charBuffer = new char[300];
-            char_offset = 0;
-        }
-        else {
-            // continue adding to current line
-            charBuffer[char_offset] = data[dataIndex];
-            char_offset++;
-        }
-    }
-
-
-    /* Process each line */
-
-
-
-	/* Transmit all proccessed data */
-	for(int lineIndex = 0; lineIndex<line_offset; lineIndex++) {
-		Transmit(lineBuffer[lineIndex], lineSize[lineIndex]);
-	}
-
-
-	for(int i = 0; i<10; i++) {
-		// delete 
-		delete[] lineBuffer[i];
-	}
-    delete[] lineBuffer;
-    delete[] charBuffer;
-	delete[] lineSize;
-}
 
 // transmit data over LoRa/RF module
 void Main::Transmit(char *data, int data_size) {
@@ -281,8 +225,9 @@ void Main::Transmit(char *data, int data_size) {
 		// tarnsmit buffer if it gets full or we reach end of data segment
 		if(((bufferOffset % 5) == 4) || bufferOffset == data_size-1) {
 			gpio_put(PICO_DEFAULT_LED_PIN, true);
+			printf("%s", transmissionBuffer);
 			if(!transmission->TransmitData(transmissionBuffer)) {
-				printf("No transmit response");
+				//printf("No transmit response");
 			}
 			gpio_put(PICO_DEFAULT_LED_PIN, false);
 

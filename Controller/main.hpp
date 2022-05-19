@@ -22,6 +22,5 @@ class Main {
         void Init();
         void RXGPS();
         void Handle_gps_data(const uint8_t *rxed, int rxed_size);
-        void Process_gps_block(char *data, int data_size);
         void Transmit(char *data, int data_size);
 };
