@@ -102,7 +102,7 @@ void Main::Init() {
 
     // LOOP, RX interrupt from GPS data, resume loop
     while (true) {
-		statusLEDTick();
+		
     }
 
 }
@@ -280,9 +280,11 @@ void Main::Transmit(char *data, int data_size) {
 
 		// tarnsmit buffer if it gets full or we reach end of data segment
 		if(((bufferOffset % 5) == 4) || bufferOffset == data_size-1) {
+			gpio_put(PICO_DEFAULT_LED_PIN, true);
 			if(!transmission->TransmitData(transmissionBuffer)) {
 				printf("No transmit response");
 			}
+			gpio_put(PICO_DEFAULT_LED_PIN, false);
 
 			memset(transmissionBuffer, 0, 5*sizeof(char));
 
