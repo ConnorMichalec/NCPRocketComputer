@@ -23,8 +23,6 @@ const int UART_BAUDRATE = 9600;
 const int UART_DATABITS = 8;  				// bit width for uart baud 
 const int UART_STOPBITS = 1;  				// amount of bits to signal stop of baud
 
-int checkCycles = 0;
-
 
 using namespace std;
 
@@ -45,7 +43,7 @@ int main() {
 }
 
 Main::Main() {
-    accumulated_received_buffer = new char[10000];	// Initialize received buffer pointer, allocating enough space
+    accumulated_received_buffer = new char[500];	// Initialize received buffer pointer, allocating enough space
     accumulated_received_buffer_offset = 0;			// start out with empty buffer so pointer offset is 0
 }
 
@@ -143,12 +141,11 @@ void Main::RXGPS() {
 // format received gps data and seperate it into chunks of positions.
 void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
 
-    //  This identifies when this block of gps data ends. Transmit/Clear the accumulated buffer and begin accumulating the new data.
-    const char* endblock_identifier = "\\$GPGLL.*(N|A)\\*.."; 
+    // This matches the nmea sentence we should send, GPGGA contains all the info we need. 
+    const char* line_identifier = "\\$GPGGA.*\\*.."; 
 
 
     // concatenate the recently received data to the end of our buffer
-
     if(accumulated_received_buffer_offset<500) {
         memcpy(&accumulated_received_buffer[accumulated_received_buffer_offset], rxed, sizeof(uint8_t)*rxed_size);
         accumulated_received_buffer_offset += rxed_size;
@@ -164,7 +161,7 @@ void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
     char temp_buffer_terminated[500];     
 
 
-    // add each char from the pointer sequence to the array
+    // add each char from the dynamic array to the array
     for(int i = 0; i<accumulated_received_buffer_offset; i++) {
         temp_buffer_terminated[i] = accumulated_received_buffer[i];
     }
@@ -177,35 +174,35 @@ void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
 
 
     // find out of we now have a whole block of gps data, if so, process this gps data to transmit 
-    regex expression(endblock_identifier);
+    regex expression(line_identifier);
     smatch match;
     string accumulated_received_buffer_string = string(temp_buffer_terminated);
 
 	bool success = 0;
-	// Only check every 50 calls to save cpu
-	if(checkCycles%50==0) {
-    	success = regex_search(accumulated_received_buffer_string, match, expression);
+
+	// Only check if we are at the end of line. to save mcu cpu power
+	if(rxed[0] == '\n') {
+		success = regex_search(accumulated_received_buffer_string, match, expression);
+		
 	}
-
-
-    // if we found a match this means we are now on the end of this data block, process what we have in the buffer, reset the buffer, and add the recently rxed data.
+    // if we found a match, transmit what we want, reset the buffer, and add the recently rxed data.
     if(success) {
+		printf("%s",temp_buffer_terminated);
 
-		// Add newline to end of block
-		accumulated_received_buffer[accumulated_received_buffer_offset] = '\n';	
-		accumulated_received_buffer_offset++;
+		// Appending a newline because the match is only to right before the newline.
+		string toTransmit = match[0].str().append("\n");
 
-        
-        Transmit(accumulated_received_buffer, accumulated_received_buffer_offset);
+        Transmit(toTransmit.c_str(), match.length(0));
 
 
         // clear buffer after everything is nice and transmitted
-        memset(accumulated_received_buffer, 0, sizeof(char)*accumulated_received_buffer_offset);
-        accumulated_received_buffer_offset = 0;
+		delete[] accumulated_received_buffer;
+		accumulated_received_buffer = new char[500];
+		accumulated_received_buffer_offset = 0;
+        
 
     }
 
-	checkCycles++;
 
     
 }
@@ -213,7 +210,7 @@ void Main::Handle_gps_data(const uint8_t *rxed, int rxed_size) {
 
 
 // transmit data over LoRa/RF module
-void Main::Transmit(char *data, int data_size) {
+void Main::Transmit(const char *data, int data_size) {
 
 	// Transmit data in 5 byte chunks
 	
@@ -225,9 +222,9 @@ void Main::Transmit(char *data, int data_size) {
 		// tarnsmit buffer if it gets full or we reach end of data segment
 		if(((bufferOffset % 5) == 4) || bufferOffset == data_size-1) {
 			gpio_put(PICO_DEFAULT_LED_PIN, true);
-			printf("%s", transmissionBuffer);
+			//printf("%s", transmissionBuffer);
 			if(!transmission->TransmitData(transmissionBuffer)) {
-				//printf("No transmit response");
+				printf("No ack response");
 			}
 			gpio_put(PICO_DEFAULT_LED_PIN, false);
 

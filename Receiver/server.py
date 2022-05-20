@@ -49,6 +49,8 @@ def hardwareInterface():
 				# Find the GPGGA line, which gives the needed information
 				if(line.decode()[0:6]=="$GPGGA"):
 					#if(cycles%2== 0):
+
+						print("GPGGA RXed")
 						parsedGps = pynmea2.parse(line.decode())
 
 						longitude = parsedGps.longitude
@@ -65,14 +67,13 @@ def hardwareInterface():
 		"altitude": altitude
 	}
 					})
+							print(gpsData)
+						
+							log.truncate()	
+							log.write(str(gpsData))
+							log.flush()
 						else:
 							print("Note: Ignoring received data, 0.0, 0.0.")
-
-						print(gpsData)
-					
-						log.truncate()	
-						log.write(str(gpsData))
-						log.flush()
 
 					#cycles+=1
 			
