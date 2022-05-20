@@ -80,7 +80,16 @@ def hardwareInterface():
 
 					
 		except UnicodeDecodeError as e:
-			print("unicode error, passing")
+			print("corrupt unicode error, passing")
+
+		except pynmea2.nmea.ChecksumError as e:
+			print("corrupt GPGGA Checksum error, passing")
+
+		except pynmea2.nmea.ParseError as e:
+			print("corrupt GPGGA Parse error, passing")
+
+		except AttributeError as e:
+			print("corrupt GPGGA Attribute error, passing")
 
 if __name__ == '__main__':
 
