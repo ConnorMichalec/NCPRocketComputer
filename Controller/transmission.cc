@@ -41,6 +41,12 @@ bool Transmission::Initialize() {
 
 	transmitter.setPALevel(RF24_PA_MAX);
 
+	// Set to higher channel as more devices use lower channels 
+	transmitter.setChannel(100);
+
+	// Set to lowest data rate to avoid interference
+	transmitter.setDataRate(RF24_250KBPS);
+
 	transmitter.setPayloadSize(PAYLOADSIZE);	// 5 bytes
 
 

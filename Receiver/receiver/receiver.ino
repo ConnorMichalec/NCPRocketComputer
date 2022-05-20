@@ -24,6 +24,12 @@ void setup(void){
 
 	transciever.setPALevel(RF24_PA_MAX);
 
+  	// Higher channel to avoid device interference
+  	transciever.setChannel(100);
+
+	// Lowest data rate to avoid interference
+	transciever.setDataRate(RF24_250KBPS);
+  
 	transciever.setPayloadSize(PAYLOADSIZE);
 
 	transciever.openReadingPipe(0, (uint8_t*) "pipeaddr");	// Open pipe 0

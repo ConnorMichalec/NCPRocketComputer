@@ -5,7 +5,7 @@
 # https://www.makeuseof.com/tag/python-javascript-communicate-json/
 # https://pythonise.com/series/learning-flask/flask-and-fetch-api
 
-import serial, time, pynmea2
+import serial, datetime, pynmea2
 import serial.tools.list_ports
 from flask import Flask,render_template,request,make_response,jsonify
 
@@ -13,7 +13,8 @@ from flask import Flask,render_template,request,make_response,jsonify
 import threading
 
 
-
+filename = str(datetime.datetime.now()) + ".log"
+log = open(filename, 'w')
 
 app = Flask("server")
 
@@ -47,7 +48,6 @@ def hardwareInterface():
 			if(line.decode()!=""):
 				# Find the GPGGA line, which gives the needed information
 				if(line.decode()[0:6]=="$GPGGA"):
-
 					#if(cycles%2== 0):
 						parsedGps = pynmea2.parse(line.decode())
 
@@ -55,24 +55,32 @@ def hardwareInterface():
 						latitude = parsedGps.latitude
 						altitude = parsedGps.altitude
 
-						#if(longitude!=0.0):
-						gpsData["points"].update({
-"point1": 
+						if(longitude!=0.0):
+							gpsData["points"].update({
+("point"+str(len(gpsData["points"]))): 
 	{
+		"timestamp": str(datetime.datetime.now().timestamp()),
 		"longitude": longitude,
 		"latitude": latitude,
 		"altitude": altitude
 	}
 					})
+						else:
+							print("Note: Ignoring received data, 0.0, 0.0.")
+
 						print(gpsData)
+					
+						log.truncate()	
+						log.write(str(gpsData))
+						log.flush()
 
 					#cycles+=1
 			
 
 
 					
-		except:
-			pass
+		except UnicodeDecodeError as e:
+			print("unicode error, passing")
 
 if __name__ == '__main__':
 
@@ -101,3 +109,4 @@ if __name__ == '__main__':
 
 	t1.join()
 	t2.join()
+
