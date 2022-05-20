@@ -14,7 +14,6 @@ import threading
 
 
 filename = str(datetime.datetime.now()) + ".log"
-log = open(filename, 'w')
 
 app = Flask("server")
 
@@ -87,7 +86,6 @@ if __name__ == '__main__':
 
 	# Connection to ardunio, automatically find respective port containing ardunio
 
-
 	found = False
 	ports = list(serial.tools.list_ports.comports())
 	for p in ports:
@@ -101,6 +99,8 @@ if __name__ == '__main__':
 	if(not found):
 		print("cant find arduino")
 		exit()
+
+	log = open(filename, 'w')
 
 	t1 = threading.Thread(target=runapp)
 	t2 = threading.Thread(target=hardwareInterface)
