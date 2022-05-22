@@ -14,7 +14,6 @@ import threading
 
 
 filename = str(datetime.datetime.now()) + ".log"
-log = open(filename, 'w')
 
 app = Flask("server")
 
@@ -81,12 +80,20 @@ def hardwareInterface():
 
 					
 		except UnicodeDecodeError as e:
-			print("unicode error, passing")
+			print("corrupt unicode error, passing")
+
+		except pynmea2.nmea.ChecksumError as e:
+			print("corrupt GPGGA Checksum error, passing")
+
+		except pynmea2.nmea.ParseError as e:
+			print("corrupt GPGGA Parse error, passing")
+
+		except AttributeError as e:
+			print("corrupt GPGGA Attribute error, passing")
 
 if __name__ == '__main__':
 
 	# Connection to ardunio, automatically find respective port containing ardunio
-
 
 	found = False
 	ports = list(serial.tools.list_ports.comports())
@@ -101,6 +108,8 @@ if __name__ == '__main__':
 	if(not found):
 		print("cant find arduino")
 		exit()
+
+	log = open(filename, 'w')
 
 	t1 = threading.Thread(target=runapp)
 	t2 = threading.Thread(target=hardwareInterface)
