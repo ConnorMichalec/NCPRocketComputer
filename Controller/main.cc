@@ -3,6 +3,7 @@
 #include <hardware/uart.h>
 #include <hardware/irq.h>
 #include <hardware/pwm.h>
+#include <hardware/clocks.h>
 
 
 // yes i know, vectors would have been easier but i was trying to learn okay?
@@ -17,7 +18,7 @@ const int pin_RXfromGPS = 1;
 // Will play tone out of this output to make finding the rocket on the ground easier.
 const int pin_beaconSpeaker = 15;
 const int beaconSpeakerWaitTime = 100;		// How many seconds to wait till beacon speaker should activate.
-const int beaconSpeakerHz = 400;			// Tone to produce 
+const int beaconSpeakerHz = 1000;			// Tone to produce 
 
 const int UART_BAUDRATE = 9600;
 const int UART_DATABITS = 8;  				// bit width for uart baud 
@@ -63,6 +64,18 @@ void Main::statusLEDTick() {
 }
 
 
+// stolen from forum
+void set_pwm_pin(uint pin, uint freq, uint duty_c) { // duty_c between 0..10000
+		gpio_set_function(pin, GPIO_FUNC_PWM);
+		uint slice_num = pwm_gpio_to_slice_num(pin);
+		pwm_config config = pwm_get_default_config();
+		float div = (float)clock_get_hz(clk_sys) / (freq * 10000);
+		pwm_config_set_clkdiv(&config, div);
+		pwm_config_set_wrap(&config, 10000); 
+		pwm_init(slice_num, &config, true); // start the pwm running according to the config
+		pwm_set_gpio_level(pin, duty_c); //connect the pin to the pwm engine and set the on/off level. 
+};
+
 void Main::Init() {
 
     stdio_init_all();
@@ -76,7 +89,13 @@ void Main::Init() {
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
 
+
+	set_pwm_pin(pin_beaconSpeaker, beaconSpeakerHz, 5000);
+
+
+
 	transmission = new Transmission();
+	
 
 	if(transmission->Initialize()) {
 		// fail
